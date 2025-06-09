@@ -1,0 +1,7 @@
+{
+  "name": "Trip Advisor Card",
+  "content_in_root": false,
+  "filename": "trip-advisor-card.js",
+  "type": "lovelace",
+  "description": "Standortbasierte Empfehlungen für Home Assistant, inklusive Kartenansicht und GPT-Tipps."
+}
