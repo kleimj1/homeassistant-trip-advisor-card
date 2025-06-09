@@ -1,4 +1,6 @@
-# Helfer für Standortauswahl
+# 🧭 Trip Advisor Card Setup (Home Assistant YAML)
+
+# 1. Helfer für Standortwahl
 input_select:
   tripadvisor_standortquelle:
     name: Standortquelle
@@ -7,7 +9,7 @@ input_select:
       - device_tracker.jochen_handy
       - zone.home
 
-# Helfer für Tourenpräferenz
+# 2. Helfer für Tourenpräferenz
   tripadvisor_praeferenz:
     name: Tourenpräferenz
     options:
@@ -17,28 +19,39 @@ input_select:
       - Essen
       - Aktivität
 
-# Template-Sensoren für Koordinaten
+# 3. Template-Sensoren für dynamische Koordinaten
 template:
   - sensor:
       - name: "tripadvisor_latitude"
         state: >
           {% set tracker = states('input_select.tripadvisor_standortquelle') %}
           {{ state_attr(tracker, 'latitude') if tracker in states else 0 }}
+
       - name: "tripadvisor_longitude"
         state: >
           {% set tracker = states('input_select.tripadvisor_standortquelle') %}
           {{ state_attr(tracker, 'longitude') if tracker in states else 0 }}
 
-# Optional: REST-Command für GPT-Anfrage
+# 4. REST-Integration mit OpenAI ChatGPT (GPT-4 / GPT-3.5)
 rest_command:
-  hole_trip_ideen:
-    url: "https://api.example.com/touren"
+  tripadvisor_openai:
+    url: "https://api.openai.com/v1/chat/completions"
     method: POST
     headers:
-      Content-Type: application/json
+      Authorization: "Bearer {{ secrets.openai_key }}"
+      Content-Type: "application/json"
     payload: >
       {
-        "lat": {{ states('sensor.tripadvisor_latitude') }},
-        "lon": {{ states('sensor.tripadvisor_longitude') }},
-        "typ": "{{ states('input_select.tripadvisor_praeferenz') }}"
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Du bist ein hilfreicher, deutschsprachiger Tourenassistent für Freizeitaktivitäten."
+          },
+          {
+            "role": "user",
+            "content": "Gib mir einen Ausflugstipp für Koordinaten {{ states('sensor.tripadvisor_latitude') }}, {{ states('sensor.tripadvisor_longitude') }}. Schwerpunkt: {{ states('input_select.tripadvisor_praeferenz') }}"
+          }
+        ],
+        "temperature": 0.7
       }
