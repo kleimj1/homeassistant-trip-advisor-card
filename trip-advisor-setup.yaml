@@ -1,0 +1,44 @@
+# Helfer für Standortauswahl
+input_select:
+  tripadvisor_standortquelle:
+    name: Standortquelle
+    options:
+      - device_tracker.fahrzeug
+      - device_tracker.jochen_handy
+      - zone.home
+
+# Helfer für Tourenpräferenz
+  tripadvisor_praeferenz:
+    name: Tourenpräferenz
+    options:
+      - Beliebig
+      - Natur
+      - Kultur
+      - Essen
+      - Aktivität
+
+# Template-Sensoren für Koordinaten
+template:
+  - sensor:
+      - name: "tripadvisor_latitude"
+        state: >
+          {% set tracker = states('input_select.tripadvisor_standortquelle') %}
+          {{ state_attr(tracker, 'latitude') if tracker in states else 0 }}
+      - name: "tripadvisor_longitude"
+        state: >
+          {% set tracker = states('input_select.tripadvisor_standortquelle') %}
+          {{ state_attr(tracker, 'longitude') if tracker in states else 0 }}
+
+# Optional: REST-Command für GPT-Anfrage
+rest_command:
+  hole_trip_ideen:
+    url: "https://api.example.com/touren"
+    method: POST
+    headers:
+      Content-Type: application/json
+    payload: >
+      {
+        "lat": {{ states('sensor.tripadvisor_latitude') }},
+        "lon": {{ states('sensor.tripadvisor_longitude') }},
+        "typ": "{{ states('input_select.tripadvisor_praeferenz') }}"
+      }
