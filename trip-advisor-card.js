@@ -26,6 +26,9 @@ class TripAdvisorCard extends HTMLElement {
     const pref = this._hass.states[this._config.praef_entity]?.state || "Beliebig";
     const apiKey = this._config.api_key;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 Sekunden Timeout
+
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -46,13 +49,16 @@ class TripAdvisorCard extends HTMLElement {
             }
           ],
           temperature: 0.7
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
       this._antwort = data.choices?.[0]?.message?.content || "Keine Antwort erhalten.";
     } catch (err) {
-      this._antwort = "Fehler beim Abruf: " + err.message;
+      this._antwort = "Fehler beim Abruf: " + (err.name === "AbortError" ? "Zeitüberschreitung (Timeout)" : err.message);
     } finally {
       this._loading = false;
       this.render();
