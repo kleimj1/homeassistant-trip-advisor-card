@@ -1,41 +1,88 @@
 class TripAdvisorCard extends HTMLElement {
-  set hass(hass) {
-    const config = this._config;
-
-    const latitudeEntity = config.latitude_entity || "sensor.tripadvisor_latitude";
-    const longitudeEntity = config.longitude_entity || "sensor.tripadvisor_longitude";
-    const praefEntity = config.praef_entity || "input_select.tripadvisor_praeferenz";
-
-    const latitude = hass.states[latitudeEntity]?.state || '0';
-    const longitude = hass.states[longitudeEntity]?.state || '0';
-    const pref = hass.states[praefEntity]?.state || 'Keine Auswahl';
-
-    this.innerHTML = `
-      <ha-card header="${config.title || '🧭 Trip Advisor'}">
-        <div class="card-content">
-          <p><strong>Standort:</strong> ${latitude}, ${longitude}</p>
-          <p><strong>Präferenz:</strong> ${pref}</p>
-          <iframe
-            width="100%"
-            height="250"
-            style="border:0"
-            loading="lazy"
-            allowfullscreen
-            src="https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(longitude)-0.01}%2C${parseFloat(latitude)-0.01}%2C${parseFloat(longitude)+0.01}%2C${parseFloat(latitude)+0.01}&layer=mapnik&marker=${latitude}%2C${longitude}">
-          </iframe>
-        </div>
-      </ha-card>
-    `;
+  static getConfigElement() {
+    return document.createElement("trip-advisor-card-editor");
   }
 
   setConfig(config) {
-    if (!config) throw new Error("Konfiguration fehlt");
+    if (!config.api_key || !config.latitude_entity || !config.longitude_entity || !config.praef_entity) {
+      throw new Error("Benötigte Konfiguration fehlt: api_key, latitude_entity, longitude_entity, praef_entity");
+    }
     this._config = config;
+    this._antwort = null;
+    this._loading = false;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this.render();
+  }
+
+  async fetchSuggestion() {
+    this._loading = true;
+    this.render();
+
+    const lat = this._hass.states[this._config.latitude_entity]?.state || "0";
+    const lon = this._hass.states[this._config.longitude_entity]?.state || "0";
+    const pref = this._hass.states[this._config.praef_entity]?.state || "Beliebig";
+    const apiKey = this._config.api_key;
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + apiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "Du bist ein deutschsprachiger Tourenassistent für Freizeitvorschläge."
+            },
+            {
+              role: "user",
+              content: `Gib mir einen Tourenvorschlag für ${lat}, ${lon} mit Schwerpunkt '${pref}'.`
+            }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      const data = await response.json();
+      this._antwort = data.choices?.[0]?.message?.content || "Keine Antwort erhalten.";
+    } catch (err) {
+      this._antwort = "Fehler beim Abruf: " + err.message;
+    } finally {
+      this._loading = false;
+      this.render();
+    }
+  }
+
+  render() {
+    if (!this._hass || !this._config) return;
+
+    const lat = this._hass.states[this._config.latitude_entity]?.state || "–";
+    const lon = this._hass.states[this._config.longitude_entity]?.state || "–";
+    const pref = this._hass.states[this._config.praef_entity]?.state || "–";
+
+    this.innerHTML = `
+      <ha-card header="${this._config.title || '🧭 Trip Advisor'}">
+        <div class="card-content">
+          <p><strong>Koordinaten:</strong> ${lat}, ${lon}</p>
+          <p><strong>Präferenz:</strong> ${pref}</p>
+          <mwc-button raised label="${this._loading ? 'Lade...' : 'Tourenvorschlag abrufen'}" ${this._loading ? "disabled" : ""}></mwc-button>
+          <pre style="white-space: pre-wrap; margin-top:1em;">${this._antwort || ''}</pre>
+        </div>
+      </ha-card>
+    `;
+
+    this.querySelector("mwc-button")?.addEventListener("click", () => this.fetchSuggestion());
   }
 
   getCardSize() {
-    return 3;
+    return 4;
   }
 }
 
-customElements.define('trip-advisor-card', TripAdvisorCard);
+customElements.define("trip-advisor-card", TripAdvisorCard);
